@@ -12,3 +12,5 @@ env/
 # Data & logs
 *.log
 cookies.txt
+*.db
+bot_database.db
