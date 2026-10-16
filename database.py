@@ -27,6 +27,11 @@ def init_db():
                 updated_at TEXT
             )
         """)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA table_info(users)")
+        cols = [c[1] for c in cursor.fetchall()]
+        if "role" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'subscriber'")
         conn.commit()
 
 def register_subscriber(chat_id: int, name: str, username: str):
