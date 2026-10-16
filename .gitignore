@@ -1,0 +1,14 @@
+# Environment variables & secrets (JANGAN PERNAH DI-COMMIT)
+.env
+
+# Python cache & virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Data & logs
+*.log
+cookies.txt
