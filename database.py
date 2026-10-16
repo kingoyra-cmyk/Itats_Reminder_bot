@@ -22,18 +22,34 @@ def init_db():
                 user_agent TEXT,
                 last_task_count INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
+                role TEXT DEFAULT 'subscriber',
                 created_at TEXT,
                 updated_at TEXT
             )
         """)
         conn.commit()
 
-def save_or_update_user(chat_id: int, name: str, username: str, session: str, xsrf: str, cf_clearance: str = "", user_agent: str = ""):
+def register_subscriber(chat_id: int, name: str, username: str):
+    """Mendaftarkan teman sebagai subscriber otomatis tanpa perlu login atau cari cookie"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_connection() as conn:
         conn.execute("""
-            INSERT INTO users (chat_id, name, username, session_cookie, xsrf_token, cf_clearance, user_agent, is_active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+            INSERT INTO users (chat_id, name, username, is_active, role, created_at, updated_at)
+            VALUES (?, ?, ?, 1, 'subscriber', ?, ?)
+            ON CONFLICT(chat_id) DO UPDATE SET
+                name = excluded.name,
+                username = excluded.username,
+                is_active = 1,
+                updated_at = excluded.updated_at
+        """, (chat_id, name, username, now, now))
+        conn.commit()
+
+def save_or_update_user(chat_id: int, name: str, username: str, session: str, xsrf: str, cf_clearance: str = "", user_agent: str = "", role: str = "member"):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO users (chat_id, name, username, session_cookie, xsrf_token, cf_clearance, user_agent, is_active, role, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
             ON CONFLICT(chat_id) DO UPDATE SET
                 name = excluded.name,
                 username = excluded.username,
@@ -42,8 +58,9 @@ def save_or_update_user(chat_id: int, name: str, username: str, session: str, xs
                 cf_clearance = excluded.cf_clearance,
                 user_agent = CASE WHEN excluded.user_agent != '' THEN excluded.user_agent ELSE users.user_agent END,
                 is_active = 1,
+                role = excluded.role,
                 updated_at = excluded.updated_at
-        """, (chat_id, name, username, session, xsrf, cf_clearance, user_agent, now, now))
+        """, (chat_id, name, username, session, xsrf, cf_clearance, user_agent, role, now, now))
         conn.commit()
 
 def get_user(chat_id: int):
@@ -51,7 +68,20 @@ def get_user(chat_id: int):
         row = conn.execute("SELECT * FROM users WHERE chat_id = ?", (chat_id,)).fetchone()
         return dict(row) if row else None
 
-def get_all_active_users():
+def get_admin_user():
+    """Mengambil user admin/pemantau utama yang memiliki cookie sesi aktif"""
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM users WHERE session_cookie IS NOT NULL AND session_cookie != '' ORDER BY (role = 'admin') DESC, updated_at DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
+
+def get_all_subscribers():
+    """Mengambil semua teman yang aktif menerima notifikasi pengingat"""
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM users WHERE is_active = 1").fetchall()
+        return [dict(r) for r in rows]
+
+def get_all_active_users_with_cookie():
+    """Mengambil semua user yang punya cookie sesi pribadi"""
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM users WHERE is_active = 1 AND session_cookie IS NOT NULL AND session_cookie != ''").fetchall()
         return [dict(r) for r in rows]

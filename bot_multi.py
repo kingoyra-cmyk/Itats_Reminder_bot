@@ -29,8 +29,8 @@ if not TELEGRAM_BOT_TOKEN:
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # Cache pengingat presensi agar tidak spam dalam 1 hari
-# Key: f"{chat_id}_{mata_kuliah}"
 notified_presensi = set()
+last_known_task_count = None
 
 def send_message(chat_id: int, text: str, parse_mode: str = "Markdown", disable_preview: bool = True) -> bool:
     url = f"{TELEGRAM_API_URL}/sendMessage"
@@ -47,54 +47,54 @@ def send_message(chat_id: int, text: str, parse_mode: str = "Markdown", disable_
         print(f"[!] Error kirim pesan ke {chat_id}: {e}")
         return False
 
+def broadcast_message(text: str):
+    """Mengirim pesan notifikasi ke semua teman yang terdaftar"""
+    subscribers = database.get_all_subscribers()
+    for sub in subscribers:
+        send_message(sub["chat_id"], text)
+
 def handle_start(chat_id: int, user_name: str, username: str):
-    user = database.get_user(chat_id)
-    if user and user.get("session_cookie"):
-        text = (
-            f"👋 *Halo, {user_name}!* Selamat datang kembali di *Bot Pengingat ITATS*.\n\n"
-            f"Akun Classroom ITATS kamu saat ini: *Terhubung & Aktif* ✅\n\n"
-            f"📌 *Menu Cepat:*\n"
-            f"• /cek - Cek tugas & presensi kamu sekarang\n"
-            f"• /status - Lihat status akun & pemantau\n"
-            f"• /hubungkan - Perbarui sesi / cookie Classroom\n"
-            f"• /pause - Jeda pengingat otomatis\n"
-            f"• /resume - Lanjutkan pengingat otomatis\n"
-            f"• /logout - Hapus data akun kamu dari bot"
-        )
-    else:
-        text = (
-            f"👋 *Halo, {user_name}!* Selamat datang di *Bot Pengingat Classroom ITATS*.\n\n"
-            f"Bot ini bisa otomatis memantau:\n"
-            f"• 📚 *Tugas kuliah yang belum selesai*\n"
-            f"• 📝 *Presensi kuliah yang dibuka & belum kamu hadiri*\n\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ *Akun kamu belum terhubung!*\n"
-            f"Ketik **/hubungkan** untuk panduan cara menghubungkan akun Classroom ITATS kamu ke bot ini."
-        )
+    # Daftarkan teman langsung sebagai subscriber (Auto 0-Login!)
+    database.register_subscriber(chat_id, user_name, username)
+
+    text = (
+        f"🎉 *Halo, {user_name}!* Selamat datang di *Bot Pengingat ITATS*.\n\n"
+        f"✅ *Kamu sudah otomatis terhubung ke sistem pengingat kelas!*\n"
+        f"Kamu **TIDAK PERLU LOGIN** dan **TIDAK PERLU CARI COOKIE** apa pun. Bot ini sudah otomatis memantau Classroom ITATS dan akan mengirim notifikasi ke chat kamu jika:\n"
+        f"• 🔔 *Ada presensi kuliah yang dibuka* (agar tidak kelewat batas absen!)\n"
+        f"• 📚 *Ada tugas kuliah baru yang belum selesai*\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"📌 *Perintah yang bisa kamu pakai:*\n"
+        f"• /cek - Cek tugas & presensi kuliah hari ini\n"
+        f"• /status - Cek status langganan notifikasi kamu\n"
+        f"• /pause - Jeda pengingat otomatis sementara\n"
+        f"• /resume - Lanjutkan kembali pengingat otomatis\n"
+        f"• /hubungkan - *(Opsional)* Hubungkan akun ITATS pribadi jika kamu dari kelas/jurusan lain\n"
+        f"• /logout - Berhenti berlangganan dari bot ini"
+    )
     send_message(chat_id, text)
 
 def handle_hubungkan(chat_id: int):
     text = (
-        f"🔑 *CARA MENGHUBUNGKAN AKUN CLASSROOM ITATS*\n\n"
+        f"💡 *PANDUAN HUBUNGKAN AKUN PRIBADI (OPSIONAL)*\n\n"
+        f"Secara bawaan, kamu **sudah otomatis menerima notifikasi pengingat kelas tanpa perlu login**.\n\n"
+        f"Namun jika kamu dari kelas atau jurusan berbeda dan ingin bot memantau akun pribadimu sendiri:\n"
         f"1. Buka browser tempat kamu login di [classroom.itats.ac.id](https://classroom.itats.ac.id/mahasiswa/home).\n"
-        f"2. Tekan tombol **F12** di keyboard $\\rightarrow$ buka tab **Network**.\n"
-        f"3. **Refresh halaman** browser kamu (`Ctrl + R` atau `F5`).\n"
-        f"4. Di daftar request yang muncul, klik kanan pada baris paling atas (**`home`**).\n"
-        f"5. Pilih **Copy** $\\rightarrow$ **Copy as cURL** (POSIX atau Windows).\n"
-        f"6. **Paste (tempel) hasil copy cURL tersebut langsung ke chat bot ini!**\n\n"
-        f"💡 _Bot akan otomatis mengekstrak cookie sesi kamu, mengujinya, dan langsung mengaktifkan pengingat untuk akunmu!_"
+        f"2. Tekan **F12** $\\rightarrow$ tab **Network** $\\rightarrow$ Refresh halaman (**F5**).\n"
+        f"3. Klik kanan pada request **`home`** $\\rightarrow$ **Copy as cURL**.\n"
+        f"4. **Paste hasil copy cURL tersebut langsung ke chat bot ini!**\n\n"
+        f"Bot akan otomatis menyinkronkan data mata kuliah dari akun pribadimu."
     )
     send_message(chat_id, text)
 
 def handle_curl_message(chat_id: int, user_name: str, username: str, text: str):
-    send_message(chat_id, "⏳ *Sedang memverifikasi sesi Classroom kamu...* Mohon tunggu sebentar.")
+    send_message(chat_id, "⏳ *Sedang memverifikasi sesi Classroom pribadi kamu...* Mohon tunggu sebentar.")
     
     parsed = itats_service.parse_curl_command(text)
     if not parsed["session"]:
-        send_message(chat_id, "❌ *Gagal:* Cookie `classroom_itats_session` tidak ditemukan di dalam teks yang kamu kirim. Pastikan kamu menyalin perintah cURL dari request `home` di tab Network.")
+        send_message(chat_id, "❌ *Gagal:* Cookie sesi tidak ditemukan di dalam teks yang kamu kirim. Pastikan kamu menyalin perintah cURL dari request `home` di tab Network.")
         return
 
-    # Uji koneksi ke ITATS
     count, new_session, new_xsrf, is_expired = itats_service.check_tasks(
         parsed["session"],
         parsed["xsrf"],
@@ -105,12 +105,11 @@ def handle_curl_message(chat_id: int, user_name: str, username: str, text: str):
     if is_expired or count is None:
         send_message(
             chat_id,
-            "❌ *Gagal Terhubung!* Sesi Classroom kamu tampaknya sudah kedaluwarsa atau tidak valid.\n"
+            "❌ *Gagal Terhubung!* Sesi Classroom tampaknya sudah kedaluwarsa atau tidak valid.\n"
             "Pastikan kamu sedang dalam kondisi login di browser saat menyalin cURL, lalu coba kirimkan lagi."
         )
         return
 
-    # Simpan ke Database
     active_session = new_session if new_session else parsed["session"]
     active_xsrf = new_xsrf if new_xsrf else parsed["xsrf"]
     database.save_or_update_user(
@@ -120,80 +119,80 @@ def handle_curl_message(chat_id: int, user_name: str, username: str, text: str):
         session=active_session,
         xsrf=active_xsrf,
         cf_clearance=parsed["cf_clearance"],
-        user_agent=parsed["user_agent"]
+        user_agent=parsed["user_agent"],
+        role="custom"
     )
     database.update_last_task_count(chat_id, count)
 
     sukses_text = (
-        f"🎉 *SELAMAT, AKUN BERHASIL TERHUBUNG!*\n\n"
+        f"🎉 *AKUN PRIBADI BERHASIL TERHUBUNG!*\n\n"
         f"👤 Nama: *{user_name}*\n"
         f"📚 Tugas Belum Selesai Saat Ini: *{count} tugas*\n"
         f"⏱️ Interval Pemantauan: *Setiap {CHECK_INTERVAL_MINUTES} menit*\n\n"
-        f"Bot sekarang otomatis mengawasi tugas dan presensi kuliahmu. Kamu bisa ketik **/cek** kapan saja!"
+        f"Bot sekarang otomatis mengawasi akun pribadimu. Ketik **/cek** kapan saja untuk cek status!"
     )
     send_message(chat_id, sukses_text)
 
 def handle_cek(chat_id: int):
     user = database.get_user(chat_id)
-    if not user or not user.get("session_cookie"):
-        send_message(chat_id, "⚠️ Akun kamu belum terhubung ke bot ini. Ketik **/hubungkan** untuk menghubungkan akun.")
+    admin = database.get_admin_user()
+
+    # Tentukan cookie sesi mana yang dipakai: sesi pribadi jika ada, atau sesi kelas utama
+    target = user if (user and user.get("session_cookie")) else admin
+
+    if not target or not target.get("session_cookie"):
+        send_message(chat_id, "⚠️ Server pemantau sedang offline. Silakan hubungi admin bot.")
         return
 
     send_message(chat_id, "🔍 *Sedang memeriksa data terbaru di Classroom ITATS...*")
 
     # 1. Cek Tugas
     count, new_sess, new_xsrf, is_expired = itats_service.check_tasks(
-        user["session_cookie"],
-        user.get("xsrf_token", ""),
-        user.get("cf_clearance", ""),
-        user.get("user_agent", "")
+        target["session_cookie"],
+        target.get("xsrf_token", ""),
+        target.get("cf_clearance", ""),
+        target.get("user_agent", "")
     )
 
     if is_expired:
-        send_message(
-            chat_id,
-            "⚠️ *Sesi Classroom Kamu Telah Kedaluwarsa!*\n"
-            "Silakan perbarui sesi kamu dengan mengirimkan cURL baru. Ketik **/hubungkan** untuk panduannya."
-        )
+        send_message(chat_id, "⚠️ Sesi pemantau Classroom kedaluwarsa. Admin perlu memperbarui sesi.")
         return
 
-    # Auto keep-alive update
     if new_sess:
-        database.update_user_cookies(chat_id, new_sess, new_xsrf)
+        database.update_user_cookies(target["chat_id"], new_sess, new_xsrf)
 
     # 2. Cek Presensi
     presensi_list, p_expired = itats_service.check_presensi(
-        new_sess or user["session_cookie"],
-        new_xsrf or user.get("xsrf_token", ""),
-        user.get("cf_clearance", ""),
-        user.get("user_agent", "")
+        new_sess or target["session_cookie"],
+        new_xsrf or target.get("xsrf_token", ""),
+        target.get("cf_clearance", ""),
+        target.get("user_agent", "")
     )
 
     waktu_str = datetime.now().strftime("%H:%M:%S WIB")
     
-    # Format Laporan Tugas
+    # Format Tugas
     if count == 0:
         tugas_str = "0 tugas (Semua beres! 🎉)"
     else:
         tugas_str = f"*{count} tugas* yang belum selesai! ⚠️"
 
-    # Format Laporan Presensi
+    # Format Presensi
     if not presensi_list:
         presensi_str = "• Tidak ada presensi yang sedang dibuka hari ini."
     else:
         p_lines = []
         for p in presensi_list:
-            icon = "✅" if p["sudah_hadir"] else "🔴 *BELUM ABSEN*"
-            status_txt = "Sudah Hadir" if p["sudah_hadir"] else "Belum Hadir"
-            p_lines.append(f"• *{p['mata_kuliah']}*: {icon} ({status_txt}) - Batas: `{p['batas']}`")
+            icon = "✅" if p["sudah_hadir"] else "🔔 *PRESENSI DIBUKA*"
+            p_lines.append(f"• *{p['mata_kuliah']}*: {icon}\n  ⏰ Batas: `{p['batas']}`")
         presensi_str = "\n".join(p_lines)
 
     hasil_text = (
-        f"📋 *STATUS CLASSROOM ITATS KAMU*\n"
+        f"📋 *STATUS CLASSROOM ITATS HARI INI*\n"
         f"⏰ _Dicek pada: {waktu_str}_\n\n"
         f"📚 *Status Tugas:*\n"
         f"{tugas_str}\n\n"
-        f"📝 *Presensi Dibuka Hari Ini:*\n"
+        f"📝 *Presensi Dibuka:*\n"
         f"{presensi_str}\n\n"
         f"🔗 [Buka Classroom ITATS](https://classroom.itats.ac.id/mahasiswa/home)"
     )
@@ -201,109 +200,109 @@ def handle_cek(chat_id: int):
 
 def handle_status(chat_id: int):
     user = database.get_user(chat_id)
-    if not user or not user.get("session_cookie"):
-        send_message(chat_id, "⚠️ Akun kamu belum terhubung. Ketik **/hubungkan** untuk menghubungkan akun.")
+    if not user:
+        send_message(chat_id, "⚠️ Kamu belum terdaftar. Ketik **/start** untuk mulai.")
         return
 
-    status_aktif = "🟢 Aktif Memantau" if user.get("is_active") else "🟡 Dijeda (Paused)"
+    status_aktif = "🟢 Aktif Menerima Notifikasi" if user.get("is_active") else "🟡 Dijeda (Paused)"
+    role_info = "Akun Pribadi" if user.get("session_cookie") else "Subscriber Kelas (Tanpa Login)"
     text = (
-        f"⚙️ *STATUS AKUN BOT KAMU*\n\n"
+        f"⚙️ *STATUS LANGGANAN KAMU*\n\n"
         f"👤 Nama: *{user.get('name', '-')}*\n"
         f"🆔 Chat ID: `{chat_id}`\n"
-        f"📡 Status Pemantau: *{status_aktif}*\n"
-        f"⏱️ Interval Pengecekan: *Setiap {CHECK_INTERVAL_MINUTES} menit*\n"
-        f"📅 Terakhir Diperbarui: `{user.get('updated_at', '-')}`\n\n"
-        f"Gunakan **/pause** untuk jeda atau **/resume** untuk mengaktifkan kembali."
+        f"📋 Mode: *{role_info}*\n"
+        f"📡 Status: *{status_aktif}*\n"
+        f"⏱️ Interval Pengecekan: *Setiap {CHECK_INTERVAL_MINUTES} menit*\n\n"
+        f"• Ketik **/pause** untuk jeda notifikasi\n"
+        f"• Ketik **/resume** untuk mengaktifkan kembali"
     )
     send_message(chat_id, text)
 
 def handle_pause(chat_id: int):
     database.set_user_status(chat_id, False)
-    send_message(chat_id, "⏸️ *Pengingat Otomatis Dijeda.*\nBot tidak akan mengirimkan notifikasi berkala. Ketik **/resume** jika ingin mengaktifkannya kembali.")
+    send_message(chat_id, "⏸️ *Notifikasi Pengingat Dijeda.*\nKamu tidak akan menerima pesan berkala. Ketik **/resume** jika ingin mengaktifkan kembali.")
 
 def handle_resume(chat_id: int):
     database.set_user_status(chat_id, True)
-    send_message(chat_id, "▶️ *Pengingat Otomatis Diaktifkan Kembali!*\nBot akan kembali memantau tugas dan presensi kamu secara berkala.")
+    send_message(chat_id, "▶️ *Notifikasi Pengingat Diaktifkan Kembali!*\nKamu akan otomatis menerima pesan pengingat presensi dan tugas.")
 
 def handle_logout(chat_id: int):
     database.delete_user(chat_id)
-    send_message(chat_id, "👋 *Akun Kamu Berhasil Dihapus!*\nData sesi kamu telah dihapus dari bot ini. Jika ingin menggunakan bot lagi di kemudian hari, cukup ketik **/hubungkan**.")
+    send_message(chat_id, "👋 *Kamu Berhasil Berhenti Berlangganan.*\nJika ingin mengaktifkan notifikasi kembali sewaktu-waktu, cukup ketik **/start** kapan saja!")
 
 def background_monitor_loop():
     """
     Loop pemantauan di latar belakang:
-    Mengecek semua user yang terdaftar di database setiap CHECK_INTERVAL_MINUTES menit.
+    Mengecek tugas & presensi secara berkala dan membroadcast ke semua teman yang terdaftar.
     """
+    global last_known_task_count
     print("[*] Background monitor loop telah berjalan...")
     while True:
         try:
-            active_users = database.get_all_active_users()
+            admin = database.get_admin_user()
+            if not admin:
+                print("[!] Belum ada sesi pemantau utama di database. Menunggu...")
+                time.sleep(60)
+                continue
+
             now_str = datetime.now().strftime("%H:%M:%S")
-            print(f"\n[{now_str}] Memeriksa {len(active_users)} pengguna terdaftar...")
+            subscribers = database.get_all_subscribers()
+            print(f"\n[{now_str}] Memeriksa ITATS untuk {len(subscribers)} penerima notifikasi...")
 
-            for u in active_users:
-                cid = u["chat_id"]
-                name = u.get("name", str(cid))
-                sess = u.get("session_cookie", "")
-                xsrf = u.get("xsrf_token", "")
-                cf = u.get("cf_clearance", "")
-                ua = u.get("user_agent", "")
-                last_task = u.get("last_task_count", 0)
+            sess = admin.get("session_cookie", "")
+            xsrf = admin.get("xsrf_token", "")
+            cf = admin.get("cf_clearance", "")
+            ua = admin.get("user_agent", "")
 
-                # 1. Pengecekan Tugas
-                count, new_sess, new_xsrf, is_expired = itats_service.check_tasks(sess, xsrf, cf, ua)
-                if is_expired:
-                    print(f"[{now_str}] [!] Sesi user {name} ({cid}) expired.")
-                    send_message(
-                        cid,
-                        "⚠️ *PERINGATAN SESI ITATS:*\n"
-                        "Sesi Classroom ITATS kamu telah kedaluwarsa. Bot tidak bisa memantau tugas/presensi kamu lagi.\n"
-                        "Silakan perbarui sesi kamu dengan mengetik **/hubungkan**."
+            # 1. Pengecekan Tugas
+            count, new_sess, new_xsrf, is_expired = itats_service.check_tasks(sess, xsrf, cf, ua)
+            if is_expired:
+                print(f"[{now_str}] [!] Sesi pemantau utama EXPIRED!")
+                send_message(admin["chat_id"], "⚠️ *Sesi Pemantau Utama Kedaluwarsa!* Mohon perbarui cURL kamu.")
+                time.sleep(1800)
+                continue
+
+            # Auto Keep-Alive sesi admin
+            if new_sess:
+                database.update_user_cookies(admin["chat_id"], new_sess, new_xsrf)
+                sess = new_sess
+                if new_xsrf:
+                    xsrf = new_xsrf
+
+            # Notifikasi Tugas jika ada tugas baru
+            if isinstance(count, int):
+                print(f"[{now_str}] Status Tugas: {count} tugas.")
+                if count > 0 and (last_known_task_count is None or count > last_known_task_count):
+                    pesan_tugas = (
+                        f"📢 *PERINGATAN TUGAS ITATS!*\n\n"
+                        f"📌 Ada *{count} tugas* yang belum selesai!\n"
+                        f"🔗 [Buka Classroom ITATS]({itats_service.ENDPOINT_HOME})\n\n"
+                        f"⏰ _Pengecekan: {now_str}_"
                     )
-                    database.set_user_status(cid, False)
-                    continue
+                    broadcast_message(pesan_tugas)
+                    last_known_task_count = count
+                elif count == 0 and last_known_task_count is not None and last_known_task_count > 0:
+                    broadcast_message("🎉 *Hebat!* Semua tugas Classroom kelas sudah selesai dikerjakan.")
+                    last_known_task_count = 0
 
-                # Auto Keep-Alive per user
-                if new_sess:
-                    database.update_user_cookies(cid, new_sess, new_xsrf)
-                    sess = new_sess
-                    if new_xsrf:
-                        xsrf = new_xsrf
-
-                if isinstance(count, int):
-                    if count > 0 and count != last_task:
-                        pesan = (
-                            f"📢 *REMINDER TUGAS ITATS!*\n\n"
-                            f"Halo *{name}*, kamu memiliki *{count} tugas* yang belum selesai!\n"
-                            f"🔗 Akses langsung: [Classroom ITATS]({itats_service.ENDPOINT_HOME})\n\n"
-                            f"⏰ _Dicek pada: {now_str}_"
+            # 2. Pengecekan Presensi Dibuka
+            presensi_list, p_expired = itats_service.check_presensi(sess, xsrf, cf, ua)
+            if presensi_list:
+                for p in presensi_list:
+                    mk = p["mata_kuliah"]
+                    key = f"broadcast_{mk}_{p['batas']}"
+                    # Kirim broadcast pengingat presensi jika dibuka dan belum pernah diingatkan hari ini
+                    if key not in notified_presensi:
+                        pesan_absen = (
+                            f"🔔 *PENGINGAT PRESENSI KULIAH ITATS!*\n\n"
+                            f"Presensi sedang dibuka untuk:\n"
+                            f"📌 Mata Kuliah: *{mk}*\n"
+                            f"⏰ Batas Waktu: *{p['batas']}*\n\n"
+                            f"👉 Jangan sampai lupa absen! Segera buka [Classroom ITATS]({itats_service.ENDPOINT_HOME}) sekarang!"
                         )
-                        send_message(cid, pesan)
-                        database.update_last_task_count(cid, count)
-                    elif count == 0 and last_task > 0:
-                        send_message(cid, "🎉 *Hebat!* Semua tugas Classroom kamu sudah selesai dikerjakan.")
-                        database.update_last_task_count(cid, 0)
-
-                # 2. Pengecekan Presensi
-                presensi_list, p_expired = itats_service.check_presensi(sess, xsrf, cf, ua)
-                if presensi_list:
-                    for p in presensi_list:
-                        mk = p["mata_kuliah"]
-                        key = f"{cid}_{mk}"
-                        if not p["sudah_hadir"]:
-                            if key not in notified_presensi:
-                                pesan_absen = (
-                                    f"⚠️ *PENGINGAT PRESENSI ITATS!*\n\n"
-                                    f"Halo *{name}*, kamu belum presensi untuk:\n"
-                                    f"📌 Mata Kuliah: *{mk}*\n"
-                                    f"⏰ Batas Waktu: *{p['batas']}*\n\n"
-                                    f"👉 Segera buka [Classroom ITATS]({itats_service.ENDPOINT_HOME}) dan lakukan presensi sekarang!"
-                                )
-                                send_message(cid, pesan_absen)
-                                notified_presensi.add(key)
-                        else:
-                            if key in notified_presensi:
-                                notified_presensi.remove(key)
+                        broadcast_message(pesan_absen)
+                        notified_presensi.add(key)
+                        print(f"[{now_str}] [!] Presensi broadcast terkirim: {mk} (Batas: {p['batas']})")
 
         except Exception as e:
             print(f"[!] Error pada background monitor: {e}")
@@ -311,7 +310,7 @@ def background_monitor_loop():
         time.sleep(CHECK_INTERVAL_MINUTES * 60)
 
 def auto_register_admin():
-    """Mendaftarkan akun pemilik dari .env secara otomatis ke database"""
+    """Mendaftarkan akun pemilik dari .env secara otomatis sebagai Admin Pemantau"""
     admin_chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     session = os.getenv("CLASSROOM_SESSION", "").strip()
     xsrf = os.getenv("XSRF_TOKEN", "").strip()
@@ -321,10 +320,8 @@ def auto_register_admin():
     if admin_chat_id and session:
         try:
             cid = int(admin_chat_id)
-            existing = database.get_user(cid)
-            if not existing:
-                database.save_or_update_user(cid, "Aryo (Admin)", "aryosyarif", session, xsrf, cf, ua)
-                print(f"[+] Akun utama (Admin Chat ID {cid}) otomatis terdaftar di database.")
+            database.save_or_update_user(cid, "Aryo (Admin)", "aryosyarif", session, xsrf, cf, ua, role="admin")
+            print(f"[+] Akun utama (Admin Chat ID {cid}) siap sebagai pemantau kelas.")
         except Exception as e:
             print(f"[!] Gagal auto-register admin: {e}")
 
@@ -335,7 +332,7 @@ def main():
     print("=" * 60)
     print("   🤖 BOT PENGINGAT CLASSROOM ITATS (MULTI-USER ENGINE)   ")
     print("=" * 60)
-    print(f"[+] Total pengguna terdaftar di database: {database.get_user_count()}")
+    print(f"[+] Total penerima terdaftar: {database.get_user_count()}")
     print("[+] Mode polling Telegram aktif. Mendengarkan pesan masuk...")
 
     # Jalankan Background Monitoring Thread
