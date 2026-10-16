@@ -285,7 +285,7 @@ def background_monitor_loop():
                     broadcast_message("🎉 *Hebat!* Semua tugas Classroom kelas sudah selesai dikerjakan.")
                     last_known_task_count = 0
 
-            # 2. Pengecekan Presensi Dibuka
+            # 2. Pengecekan Presensi Dibuka (Kelas Utama)
             presensi_list, p_expired = itats_service.check_presensi(sess, xsrf, cf, ua)
             if presensi_list:
                 for p in presensi_list:
@@ -303,6 +303,45 @@ def background_monitor_loop():
                         broadcast_message(pesan_absen)
                         notified_presensi.add(key)
                         print(f"[{now_str}] [!] Presensi broadcast terkirim: {mk} (Batas: {p['batas']})")
+
+            # 3. Pengecekan Khusus untuk Teman Beda Prodi (Akun Pribadi Custom)
+            custom_users = database.get_all_active_users_with_cookie()
+            for cu in custom_users:
+                if cu["chat_id"] == admin["chat_id"]:
+                    continue  # Admin sudah dicek di atas
+
+                c_cid = cu["chat_id"]
+                c_name = cu.get("name", "Teman")
+                c_sess = cu.get("session_cookie", "")
+                c_xsrf = cu.get("xsrf_token", "")
+                c_cf = cu.get("cf_clearance", "")
+                c_ua = cu.get("user_agent", "")
+                c_last_task = cu.get("last_task_count", 0)
+
+                # Cek Tugas Beda Prodi
+                c_count, c_newsess, c_newxsrf, c_expired = itats_service.check_tasks(c_sess, c_xsrf, c_cf, c_ua)
+                if c_expired:
+                    send_message(c_cid, "⚠️ *Sesi Akun ITATS Kamu Kedaluwarsa!*\nKetik /hubungkan untuk memperbarui sesi.")
+                    continue
+
+                if c_newsess:
+                    database.update_user_cookies(c_cid, c_newsess, c_newxsrf)
+                    c_sess = c_newsess
+
+                if isinstance(c_count, int):
+                    if c_count > 0 and (c_last_task is None or c_count > c_last_task):
+                        send_message(c_cid, f"📢 *PENGINGAT TUGAS ITATS!*\n\nHalo *{c_name}*, ada *{c_count} tugas* belum selesai di akunmu!\n🔗 [Buka Classroom ITATS]({itats_service.ENDPOINT_HOME})")
+                        database.update_last_task_count(c_cid, c_count)
+
+                # Cek Presensi Beda Prodi
+                c_presensi, _ = itats_service.check_presensi(c_sess, c_xsrf, c_cf, c_ua)
+                if c_presensi:
+                    for cp in c_presensi:
+                        mk = cp["mata_kuliah"]
+                        key = f"custom_{c_cid}_{mk}_{cp['batas']}"
+                        if not cp["sudah_hadir"] and key not in notified_presensi:
+                            send_message(c_cid, f"🔔 *PENGINGAT PRESENSI ITATS!*\n\nHalo *{c_name}*, presensi dibuka untuk:\n📌 Mata Kuliah: *{mk}*\n⏰ Batas Waktu: *{cp['batas']}*\n👉 Segera buka [Classroom ITATS]({itats_service.ENDPOINT_HOME})!")
+                            notified_presensi.add(key)
 
         except Exception as e:
             print(f"[!] Error pada background monitor: {e}")
