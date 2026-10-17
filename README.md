@@ -55,7 +55,44 @@ Double-click file **`run.bat`** *(atau ketik `python bot.py`)*.
 - `/start` — Mendaftar sebagai penerima pengingat kelas (Otomatis tanpa login)
 - `/cek` — Melihat status tugas & presensi kuliah hari ini
 - `/status` — Melihat status akun dan koneksi pemantau
-- `/hubungkan` — Hubungkan akun ITATS pribadi (khusus untuk teman yang beda prodi)
+- `/hubungkan` — Panduan menghubungkan akun ITATS pribadi (khusus teman beda prodi/kelas)
 - `/pause` — Menjeda notifikasi berkala
 - `/resume` — Mengaktifkan kembali notifikasi
 - `/logout` — Berhenti berlangganan notifikasi
+
+---
+
+## 💡 Panduan Hubungkan Akun Pribadi (Beda Prodi / Kelas)
+
+### 🤔 Siapa yang Membutuhkan Fitur Ini?
+- **Teman Sekelas (Informatika):** **TIDAK PERLU** hubungkan akun. Cukup klik **/start** di bot Telegram, kamu sudah otomatis menerima broadcast pengingat tugas dan presensi kelas tanpa ribet.
+- **Teman Beda Prodi / Beda Kelas / Beda Semester:** Karena jadwal kuliah dan tugasnya berbeda, teman beda prodi dapat menghubungkan akun Classroom ITATS masing-masing agar bot memantau akun pribadi mereka secara independen.
+
+---
+
+### 💻 Cara 1: Lewat Browser Laptop / PC (Copy cURL — 1 Menit Selesai)
+1. Buka browser (Chrome / Edge / Firefox) di laptop/PC dan pastikan sudah login ke [classroom.itats.ac.id/mahasiswa/home](https://classroom.itats.ac.id/mahasiswa/home).
+2. Tekan tombol **F12** di keyboard (atau klik kanan di mana saja ➡️ pilih **Inspect**).
+3. Klik tab **Network** pada panel inspect yang muncul.
+4. Muat ulang halaman dengan menekan **F5** (Refresh).
+5. Pada kolom pencarian atau daftar nama request, cari dan klik kanan pada request bernama **`home`**.
+6. Pilih **Copy** ➡️ **Copy as cURL** *(bisa pilih `Copy as cURL (bash)` atau `Copy as cURL (cmd)`)*.
+7. Buka chat bot Telegram **[@ItatsReminder_Bot](https://t.me/ItatsReminder_Bot)**, lalu **Paste (tempelkan)** teks panjang cURL tersebut langsung ke chat bot dan kirim!
+8. Bot akan otomatis mengekstrak cookie sesi, memverifikasinya, dan mengaktifkan pemantauan khusus untuk akunmu.
+
+---
+
+### 📱 Cara 2: Jika Menggunakan HP / Smartphone
+Karena browser bawaan HP (Chrome Android / Safari iOS) tidak memiliki panel Inspect Element / F12:
+1. **Langkah Sekali Saja via Laptop:** Buka laptop/komputer sekali saja, salin cURL request `home` menggunakan langkah di Cara 1.
+2. Kirimkan teks cURL tersebut ke chat bot Telegram di HP kamu (misalnya lewat Saved Messages Telegram atau langsung ke bot).
+3. Begitu terhubung, kamu **tidak perlu laptop lagi!** Notifikasi pengingat presensi dan tugas baru akan langsung masuk ke Telegram HP kamu setiap hari.
+4. Bot dilengkapi sistem **Auto Keep-Alive**, sehingga sesi login akan otomatis diperbarui dan tetap aktif.
+
+---
+
+### 🔒 Keamanan & Privasi
+- Bot **TIDAK PERNAH** meminta atau menyimpan password ITATS kamu.
+- Bot hanya menggunakan cookie sesi sementara untuk membaca API tugas belum selesai dan jadwal presensi kuliah hari ini.
+- Kamu bisa memutus sambungan kapan saja dengan mengetik **/logout** di chat bot.
+

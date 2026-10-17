@@ -76,14 +76,20 @@ def handle_start(chat_id: int, user_name: str, username: str):
 
 def handle_hubungkan(chat_id: int):
     text = (
-        f"💡 *PANDUAN HUBUNGKAN AKUN PRIBADI (OPSIONAL)*\n\n"
-        f"Secara bawaan, kamu **sudah otomatis menerima notifikasi pengingat kelas tanpa perlu login**.\n\n"
-        f"Namun jika kamu dari kelas atau jurusan berbeda dan ingin bot memantau akun pribadimu sendiri:\n"
-        f"1. Buka browser tempat kamu login di [classroom.itats.ac.id](https://classroom.itats.ac.id/mahasiswa/home).\n"
-        f"2. Tekan **F12** $\\rightarrow$ tab **Network** $\\rightarrow$ Refresh halaman (**F5**).\n"
-        f"3. Klik kanan pada request **`home`** $\\rightarrow$ **Copy as cURL**.\n"
-        f"4. **Paste hasil copy cURL tersebut langsung ke chat bot ini!**\n\n"
-        f"Bot akan otomatis menyinkronkan data mata kuliah dari akun pribadimu."
+        f"💡 *PANDUAN HUBUNGKAN AKUN PRIBADI*\n\n"
+        f"📌 *Siapa yang perlu hubungkan akun?*\n"
+        f"• *Teman Sekelas (Informatika):* **TIDAK PERLU**. Cukup ketik /start kamu sudah otomatis menerima pengingat presensi & tugas kelas.\n"
+        f"• *Teman Beda Prodi / Beda Kelas:* Silakan hubungkan akun agar bot memantau mata kuliah pribadimu sendiri.\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💻 *Cara Hubungkan (Lewat Browser Laptop/PC):*\n"
+        f"1. Buka [Classroom ITATS](https://classroom.itats.ac.id/mahasiswa/home) di browser (Chrome/Edge/Firefox).\n"
+        f"2. Tekan tombol *F12* di keyboard (atau klik kanan ➡️ *Inspect*).\n"
+        f"3. Klik tab *Network*, lalu muat ulang halaman (*F5*).\n"
+        f"4. Cari request bernama *`home`*, klik kanan ➡️ pilih *Copy* ➡️ *Copy as cURL*.\n"
+        f"5. *Paste / tempelkan* teks cURL tersebut langsung ke chat bot ini!\n\n"
+        f"📱 *Bagaimana jika lewat HP?*\n"
+        f"Cukup buka laptop sekali saja untuk salin cURL di atas, lalu kirimkan teks cURL-nya ke chat bot ini. Setelah terhubung, kamu bisa memantau semuanya langsung lewat HP tanpa perlu buka laptop lagi!\n\n"
+        f"🔒 *Catatan Keamanan:* Bot tidak menyimpan password ITATS kamu, hanya membaca cookie sesi sementara untuk jadwal presensi & tugas."
     )
     send_message(chat_id, text)
 
