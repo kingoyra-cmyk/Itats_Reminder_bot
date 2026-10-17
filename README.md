@@ -70,7 +70,18 @@ Double-click file **`run.bat`** *(atau ketik `python bot.py`)*.
 
 ---
 
-### 💻 Cara 1: Lewat Browser Laptop / PC (Copy cURL — 1 Menit Selesai)
+### 🚀 Cara 1: Login Otomatis 1-Klik (via `login_teman.bat` — Paling Mudah Tanpa F12)
+Jika temanmu tidak punya laptop atau merasa ribet menyalin kode cURL:
+1. Minta temanmu menekan **/start** di bot Telegram **[@ItatsReminder_Bot](https://t.me/ItatsReminder_Bot)**.
+2. Di laptop host (Aryo), double-click file **`login_teman.bat`**.
+3. Di layar terminal, pilih nomor temanmu dari daftar pelanggan yang muncul.
+4. Jendela login ITATS akan otomatis terbuka di browser. Temanmu tinggal mengetikkan NPM & Password miliknya (atau dibantu ketikkan).
+5. Begitu berhasil login, jendela akan otomatis tertutup sendiri.
+6. Sesi cookie langsung tersimpan ke database dan bot **otomatis mengirim pesan konfirmasi sukses ke Telegram HP temanmu!**
+
+---
+
+### 💻 Cara 2: Lewat Browser Laptop / PC (Copy cURL — Mandiri)
 1. Buka browser (Chrome / Edge / Firefox) di laptop/PC dan pastikan sudah login ke [classroom.itats.ac.id/mahasiswa/home](https://classroom.itats.ac.id/mahasiswa/home).
 2. Tekan tombol **F12** di keyboard (atau klik kanan di mana saja ➡️ pilih **Inspect**).
 3. Klik tab **Network** pada panel inspect yang muncul.
@@ -80,14 +91,16 @@ Double-click file **`run.bat`** *(atau ketik `python bot.py`)*.
 7. Buka chat bot Telegram **[@ItatsReminder_Bot](https://t.me/ItatsReminder_Bot)**, lalu **Paste (tempelkan)** teks panjang cURL tersebut langsung ke chat bot dan kirim!
 8. Bot akan otomatis mengekstrak cookie sesi, memverifikasinya, dan mengaktifkan pemantauan khusus untuk akunmu.
 
+
 ---
 
-### 📱 Cara 2: Jika Menggunakan HP / Smartphone
-Karena browser bawaan HP (Chrome Android / Safari iOS) tidak memiliki panel Inspect Element / F12:
-1. **Langkah Sekali Saja via Laptop:** Buka laptop/komputer sekali saja, salin cURL request `home` menggunakan langkah di Cara 1.
-2. Kirimkan teks cURL tersebut ke chat bot Telegram di HP kamu (misalnya lewat Saved Messages Telegram atau langsung ke bot).
-3. Begitu terhubung, kamu **tidak perlu laptop lagi!** Notifikasi pengingat presensi dan tugas baru akan langsung masuk ke Telegram HP kamu setiap hari.
-4. Bot dilengkapi sistem **Auto Keep-Alive**, sehingga sesi login akan otomatis diperbarui dan tetap aktif.
+### 📱 Cara 3: Jika Menggunakan HP / Smartphone (Tanpa Laptop)
+Jika temanmu hanya punya HP dan tidak ada laptop:
+1. **Opsi Paling Cepat:** Temanmu minta tolong ke kamu (Aryo) untuk menjalankan **`login_teman.bat`** (Cara 1 di atas). Temanmu hanya perlu kirim /start di Telegram.
+2. **Opsi Mandiri via HP Android:**
+   - Install **Kiwi Browser** dari Google Play Store (browser ini memiliki fitur Developer Tools F12 bawaan).
+   - Login ke `classroom.itats.ac.id`, buka menu titik tiga (⋮) ➡️ **Developer Tools** ➡️ tab **Network** ➡️ Refresh.
+   - Salin cURL request `home`, lalu kirimkan langsung ke chat bot Telegram **[@ItatsReminder_Bot](https://t.me/ItatsReminder_Bot)**.
 
 ---
 

@@ -15,4 +15,5 @@ cookies.txt
 *.db
 bot_database.db
 edge_login_profile/
+edge_teman_profile/
 edge_temp/
