@@ -211,7 +211,15 @@ def handle_status(chat_id: int):
         return
 
     status_aktif = "🟢 Aktif Menerima Notifikasi" if user.get("is_active") else "🟡 Dijeda (Paused)"
-    role_info = "Akun Pribadi" if user.get("session_cookie") else "Subscriber Kelas (Tanpa Login)"
+    
+    role = user.get("role", "subscriber")
+    if role == "admin":
+        role_info = "👑 Admin Pemantau Kelas"
+    elif role == "custom" or (role != "admin" and user.get("session_cookie")):
+        role_info = "🔗 Akun Pribadi (Beda Prodi)"
+    else:
+        role_info = "👥 Subscriber Kelas (Tanpa Login)"
+
     text = (
         f"⚙️ *STATUS LANGGANAN KAMU*\n\n"
         f"👤 Nama: *{user.get('name', '-')}*\n"
