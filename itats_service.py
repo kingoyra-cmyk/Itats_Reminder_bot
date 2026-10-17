@@ -1,8 +1,11 @@
 import subprocess
 import json
 import re
+import shutil
 from typing import Optional, Tuple, List, Dict
 from bs4 import BeautifulSoup
+
+CURL_BIN = "curl.exe" if shutil.which("curl.exe") else "curl"
 
 BASE_URL = "https://classroom.itats.ac.id"
 ENDPOINT_TUGAS = f"{BASE_URL}/mahasiswa/getTugasBelumSelesai"
@@ -66,7 +69,7 @@ def check_tasks(session: str, xsrf: str = "", cf_clearance: str = "", user_agent
     cookie_str = "; ".join(cookie_list)
 
     cmd = [
-        "curl.exe", "-s", "-i",
+        CURL_BIN, "-s", "-i",
         "-H", f"User-Agent: {user_agent or DEFAULT_USER_AGENT}",
         "-H", "x-requested-with: XMLHttpRequest",
         "-H", "Accept: application/json, text/javascript, */*; q=0.01",
@@ -114,7 +117,7 @@ def check_presensi(session: str, xsrf: str = "", cf_clearance: str = "", user_ag
     cookie_str = "; ".join(cookie_list)
 
     cmd = [
-        "curl.exe", "-s",
+        CURL_BIN, "-s",
         "-H", f"User-Agent: {user_agent or DEFAULT_USER_AGENT}",
         "-H", f"Referer: {BASE_URL}/login",
         "-b", cookie_str,
