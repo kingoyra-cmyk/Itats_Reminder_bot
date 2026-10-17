@@ -27,10 +27,15 @@ if not TELEGRAM_BOT_TOKEN:
     sys.exit(1)
 
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+ADMIN_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID", "0").strip() or "0")
 
 # Cache pengingat presensi agar tidak spam dalam 1 hari
 notified_presensi = set()
 last_known_task_count = None
+
+def is_admin(chat_id: int) -> bool:
+    """Cek apakah pengirim pesan adalah admin bot"""
+    return chat_id == ADMIN_CHAT_ID
 
 def send_message(chat_id: int, text: str, parse_mode: str = "Markdown", disable_preview: bool = True) -> bool:
     url = f"{TELEGRAM_API_URL}/sendMessage"
@@ -244,6 +249,133 @@ def handle_logout(chat_id: int):
     database.delete_user(chat_id)
     send_message(chat_id, "👋 *Kamu Berhasil Berhenti Berlangganan.*\nJika ingin mengaktifkan notifikasi kembali sewaktu-waktu, cukup ketik **/start** kapan saja!")
 
+# ─────────────────────────────────────────────
+#   PANEL ADMIN (Hanya bisa diakses oleh Admin)
+# ─────────────────────────────────────────────
+
+def handle_admin_panel(chat_id: int):
+    """Menampilkan daftar perintah eksklusif admin"""
+    text = (
+        f"👑 *PANEL ADMIN — BOT PENGINGAT ITATS*\n\n"
+        f"Perintah berikut *hanya* bisa diakses oleh kamu sebagai admin:\n\n"
+        f"📋 *Data & Monitoring:*\n"
+        f"• /daftar — Lihat semua pengguna terdaftar\n"
+        f"• /sesi — Cek status sesi Classroom aktif\n\n"
+        f"📣 *Komunikasi:*\n"
+        f"• /broadcast `<pesan>` — Kirim pesan ke semua subscriber\n"
+        f"  _Contoh: /broadcast Kuliah hari ini libur!_\n\n"
+        f"🚫 *Manajemen Pengguna:*\n"
+        f"• /kick `<chat_id>` — Hapus pengguna dari bot\n"
+        f"  _Contoh: /kick 123456789_\n\n"
+        f"⚙️ *Sistem:*\n"
+        f"• /admin — Tampilkan panel ini"
+    )
+    send_message(chat_id, text)
+
+def handle_admin_daftar(chat_id: int):
+    """Menampilkan daftar semua pengguna terdaftar"""
+    users = database.get_all_subscribers()
+    if not users:
+        send_message(chat_id, "📭 Belum ada pengguna terdaftar.")
+        return
+
+    lines = [f"📋 *DAFTAR PENGGUNA TERDAFTAR ({len(users)} orang)*\n"]
+    for i, u in enumerate(users, 1):
+        role = u.get("role", "subscriber")
+        if role == "admin":
+            icon = "👑"
+            mode = "Admin"
+        elif u.get("session_cookie"):
+            icon = "🔗"
+            mode = "Akun Pribadi"
+        else:
+            icon = "👥"
+            mode = "Subscriber"
+        status = "🟢" if u.get("is_active") else "🔴"
+        uname = f"@{u['username']}" if u.get("username") else "tanpa username"
+        lines.append(f"{i}. {icon} *{u.get('name', '-')}* ({uname})\n   {status} {mode} | ID: `{u['chat_id']}`")
+
+    send_message(chat_id, "\n".join(lines))
+
+def handle_admin_broadcast(chat_id: int, pesan: str):
+    """Broadcast pesan custom ke semua subscriber"""
+    if not pesan.strip():
+        send_message(chat_id, "⚠️ Format salah. Gunakan: /broadcast pesan kamu di sini")
+        return
+
+    subscribers = database.get_all_subscribers()
+    sukses = 0
+    gagal = 0
+    pesan_kirim = f"📢 *PENGUMUMAN DARI ADMIN BOT*\n\n{pesan}"
+
+    for sub in subscribers:
+        if sub["chat_id"] == chat_id:
+            continue  # Jangan kirim ke diri sendiri
+        ok = send_message(sub["chat_id"], pesan_kirim)
+        if ok:
+            sukses += 1
+        else:
+            gagal += 1
+
+    send_message(
+        chat_id,
+        f"✅ *Broadcast Selesai!*\n\n"
+        f"📨 Terkirim ke: *{sukses} pengguna*\n"
+        f"❌ Gagal: *{gagal} pengguna*\n\n"
+        f"_Pesan yang dikirim:_\n\"{pesan}\""
+    )
+
+def handle_admin_kick(chat_id: int, target_id_str: str):
+    """Hapus pengguna dari bot berdasarkan chat_id"""
+    if not target_id_str.strip().isdigit():
+        send_message(chat_id, "⚠️ Format salah. Gunakan: /kick 123456789")
+        return
+
+    target_id = int(target_id_str.strip())
+    if target_id == ADMIN_CHAT_ID:
+        send_message(chat_id, "❌ Tidak bisa menghapus akun admin sendiri!")
+        return
+
+    user = database.get_user(target_id)
+    if not user:
+        send_message(chat_id, f"⚠️ Pengguna dengan ID `{target_id}` tidak ditemukan.")
+        return
+
+    nama = user.get("name", str(target_id))
+    database.delete_user(target_id)
+    send_message(target_id, "ℹ️ Kamu telah dihapus dari daftar penerima notifikasi bot oleh admin. Ketik /start jika ingin mendaftar kembali.")
+    send_message(chat_id, f"✅ Pengguna *{nama}* (ID: `{target_id}`) berhasil dihapus dari bot.")
+
+def handle_admin_sesi(chat_id: int):
+    """Menampilkan status sesi Classroom aktif"""
+    admin = database.get_admin_user()
+    if not admin or not admin.get("session_cookie"):
+        send_message(
+            chat_id,
+            "❌ *Tidak ada sesi Classroom aktif!*\n"
+            "Jalankan `login_otomatis.bat` untuk memperbarui sesi."
+        )
+        return
+
+    custom_users = database.get_all_active_users_with_cookie()
+    non_admin = [u for u in custom_users if u["chat_id"] != admin["chat_id"]]
+
+    updated = admin.get("updated_at", "-")
+    text = (
+        f"🔑 *STATUS SESI CLASSROOM AKTIF*\n\n"
+        f"👑 *Admin (Sesi Utama):*\n"
+        f"   Nama: *{admin.get('name', '-')}*\n"
+        f"   Terakhir diperbarui: `{updated}`\n\n"
+    )
+    if non_admin:
+        text += f"🔗 *Akun Pribadi Terhubung ({len(non_admin)} akun):*\n"
+        for u in non_admin:
+            text += f"   • *{u.get('name', '-')}* | Diperbarui: `{u.get('updated_at', '-')}`\n"
+    else:
+        text += "🔗 *Akun Pribadi:* Belum ada yang terhubung."
+
+    send_message(chat_id, text)
+
 def background_monitor_loop():
     """
     Loop pemantauan di latar belakang:
@@ -414,8 +546,24 @@ def main():
                     username = msg["from"].get("username", "")
                     text = msg["text"].strip()
 
-                    # Routing Perintah
-                    if text.startswith("/start"):
+                    # ── Perintah Admin Eksklusif ──
+                    if text.startswith("/admin") and is_admin(chat_id):
+                        handle_admin_panel(chat_id)
+                    elif text.startswith("/daftar") and is_admin(chat_id):
+                        handle_admin_daftar(chat_id)
+                    elif text.startswith("/broadcast") and is_admin(chat_id):
+                        pesan = text[len("/broadcast"):].strip()
+                        handle_admin_broadcast(chat_id, pesan)
+                    elif text.startswith("/kick") and is_admin(chat_id):
+                        target = text[len("/kick"):].strip()
+                        handle_admin_kick(chat_id, target)
+                    elif text.startswith("/sesi") and is_admin(chat_id):
+                        handle_admin_sesi(chat_id)
+                    # ── Perintah Admin yang diketik orang lain → tolak diam-diam ──
+                    elif text.startswith(("/admin", "/daftar", "/broadcast", "/kick", "/sesi")) and not is_admin(chat_id):
+                        send_message(chat_id, "❓ Perintah tidak dikenali.\nKetik **/cek** untuk cek status tugas & presensi, atau **/help** untuk bantuan.")
+                    # ── Perintah Umum ──
+                    elif text.startswith("/start"):
                         handle_start(chat_id, first_name, username)
                     elif text.startswith("/hubungkan"):
                         handle_hubungkan(chat_id)
