@@ -33,9 +33,16 @@ ADMIN_CHAT_ID = int(os.getenv("TELEGRAM_CHAT_ID", "0").strip() or "0")
 notified_presensi = set()
 last_known_task_count = None
 
-def is_admin(chat_id: int) -> bool:
-    """Cek apakah pengirim pesan adalah admin bot"""
+def is_super_admin(chat_id: int) -> bool:
+    """Super Admin: hanya pemilik bot berdasarkan .env (full access)"""
     return chat_id == ADMIN_CHAT_ID
+
+def is_admin(chat_id: int) -> bool:
+    """Admin: Super Admin ATAU co-admin yang dipromote via /promote"""
+    if chat_id == ADMIN_CHAT_ID:
+        return True
+    user = database.get_user(chat_id)
+    return user is not None and user.get("role") in ("admin", "co-admin")
 
 def send_message(chat_id: int, text: str, parse_mode: str = "Markdown", disable_preview: bool = True) -> bool:
     url = f"{TELEGRAM_API_URL}/sendMessage"
@@ -255,21 +262,23 @@ def handle_logout(chat_id: int):
 
 def handle_admin_panel(chat_id: int):
     """Menampilkan daftar perintah eksklusif admin"""
+    is_super = is_super_admin(chat_id)
     text = (
         f"👑 *PANEL ADMIN — BOT PENGINGAT ITATS*\n\n"
-        f"Perintah berikut *hanya* bisa diakses oleh kamu sebagai admin:\n\n"
         f"📋 *Data & Monitoring:*\n"
         f"• /daftar — Lihat semua pengguna terdaftar\n"
         f"• /sesi — Cek status sesi Classroom aktif\n\n"
         f"📣 *Komunikasi:*\n"
-        f"• /broadcast `<pesan>` — Kirim pesan ke semua subscriber\n"
-        f"  _Contoh: /broadcast Kuliah hari ini libur!_\n\n"
+        f"• /broadcast `<pesan>` — Kirim pesan ke semua subscriber\n\n"
         f"🚫 *Manajemen Pengguna:*\n"
         f"• /kick `<chat_id>` — Hapus pengguna dari bot\n"
-        f"  _Contoh: /kick 123456789_\n\n"
+        f"• /promote `<chat_id>` — Jadikan pengguna sebagai Co-Admin\n"
+        f"• /demote `<chat_id>` — Turunkan Co-Admin kembali ke subscriber\n\n"
         f"⚙️ *Sistem:*\n"
-        f"• /admin — Tampilkan panel ini"
+        f"• /admin — Tampilkan panel ini\n"
     )
+    if not is_super:
+        text += "\n_ℹ️ Kamu adalah Co-Admin. Perintah /broadcast, /kick, /promote, /demote hanya bisa dipakai oleh Super Admin._"
     send_message(chat_id, text)
 
 def handle_admin_daftar(chat_id: int):
@@ -375,6 +384,44 @@ def handle_admin_sesi(chat_id: int):
         text += "🔗 *Akun Pribadi:* Belum ada yang terhubung."
 
     send_message(chat_id, text)
+
+def handle_admin_promote(chat_id: int, target_id_str: str):
+    """Promote pengguna menjadi co-admin (hanya super admin)"""
+    if not target_id_str.strip().isdigit():
+        send_message(chat_id, "⚠️ Format salah. Gunakan: /promote 123456789")
+        return
+    target_id = int(target_id_str.strip())
+    if target_id == ADMIN_CHAT_ID:
+        send_message(chat_id, "ℹ️ Kamu sudah menjadi Super Admin, tidak perlu di-promote.")
+        return
+    user = database.get_user(target_id)
+    if not user:
+        send_message(chat_id, f"⚠️ Pengguna dengan ID `{target_id}` tidak ditemukan di database.\nPastikan mereka sudah menekan /start terlebih dahulu.")
+        return
+    nama = user.get("name", str(target_id))
+    database.set_user_role(target_id, "co-admin")
+    send_message(target_id, f"🎖️ *Selamat, {nama}!*\nKamu telah dipromote menjadi *Co-Admin* bot oleh admin.\nKamu sekarang bisa menggunakan perintah /daftar dan /sesi.")
+    send_message(chat_id, f"✅ *{nama}* (ID: `{target_id}`) berhasil dipromote menjadi *Co-Admin*.")
+
+def handle_admin_demote(chat_id: int, target_id_str: str):
+    """Turunkan co-admin kembali ke subscriber (hanya super admin)"""
+    if not target_id_str.strip().isdigit():
+        send_message(chat_id, "⚠️ Format salah. Gunakan: /demote 123456789")
+        return
+    target_id = int(target_id_str.strip())
+    if target_id == ADMIN_CHAT_ID:
+        send_message(chat_id, "❌ Tidak bisa menurunkan akun Super Admin sendiri!")
+        return
+    user = database.get_user(target_id)
+    if not user:
+        send_message(chat_id, f"⚠️ Pengguna dengan ID `{target_id}` tidak ditemukan.")
+        return
+    nama = user.get("name", str(target_id))
+    # Tentukan role yang sesuai setelah demote
+    new_role = "custom" if user.get("session_cookie") else "subscriber"
+    database.set_user_role(target_id, new_role)
+    send_message(target_id, f"ℹ️ *{nama}*, akses Co-Admin kamu telah dicabut oleh admin.")
+    send_message(chat_id, f"✅ *{nama}* (ID: `{target_id}`) berhasil diturunkan kembali ke *{new_role}*.")
 
 def background_monitor_loop():
     """
@@ -551,16 +598,22 @@ def main():
                         handle_admin_panel(chat_id)
                     elif text.startswith("/daftar") and is_admin(chat_id):
                         handle_admin_daftar(chat_id)
-                    elif text.startswith("/broadcast") and is_admin(chat_id):
-                        pesan = text[len("/broadcast"):].strip()
-                        handle_admin_broadcast(chat_id, pesan)
-                    elif text.startswith("/kick") and is_admin(chat_id):
-                        target = text[len("/kick"):].strip()
-                        handle_admin_kick(chat_id, target)
                     elif text.startswith("/sesi") and is_admin(chat_id):
                         handle_admin_sesi(chat_id)
-                    # ── Perintah Admin yang diketik orang lain → tolak diam-diam ──
-                    elif text.startswith(("/admin", "/daftar", "/broadcast", "/kick", "/sesi")) and not is_admin(chat_id):
+                    elif text.startswith("/broadcast") and is_super_admin(chat_id):
+                        pesan = text[len("/broadcast"):].strip()
+                        handle_admin_broadcast(chat_id, pesan)
+                    elif text.startswith("/kick") and is_super_admin(chat_id):
+                        target = text[len("/kick"):].strip()
+                        handle_admin_kick(chat_id, target)
+                    elif text.startswith("/promote") and is_super_admin(chat_id):
+                        target = text[len("/promote"):].strip()
+                        handle_admin_promote(chat_id, target)
+                    elif text.startswith("/demote") and is_super_admin(chat_id):
+                        target = text[len("/demote"):].strip()
+                        handle_admin_demote(chat_id, target)
+                    # ── Perintah Admin yang diketik orang biasa → tolak diam-diam ──
+                    elif text.startswith(("/admin", "/daftar", "/broadcast", "/kick", "/sesi", "/promote", "/demote")) and not is_admin(chat_id):
                         send_message(chat_id, "❓ Perintah tidak dikenali.\nKetik **/cek** untuk cek status tugas & presensi, atau **/help** untuk bantuan.")
                     # ── Perintah Umum ──
                     elif text.startswith("/start"):

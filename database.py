@@ -119,3 +119,13 @@ def get_user_count():
     with get_connection() as conn:
         row = conn.execute("SELECT COUNT(*) as total FROM users").fetchone()
         return row["total"] if row else 0
+
+def set_user_role(chat_id: int, role: str):
+    """Ubah role pengguna: admin / co-admin / custom / subscriber"""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET role = ?, updated_at = ? WHERE chat_id = ?",
+            (role, now, chat_id)
+        )
+        conn.commit()
